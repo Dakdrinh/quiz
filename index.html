@@ -826,14 +826,14 @@ document.querySelectorAll('.mode-btn').forEach(btn=>{
     if(state.mode === 'exam' || state.mode === 'mock'){
       const actualNum = Math.min(CONFIG.EXAM_QUESTION_COUNT, state.questions.length);
       const infoEl = document.getElementById(state.mode==='exam' ? 'examFixedInfo' : 'mockFixedInfo');
-      const tailNote = state.mode==='mock' ? ' Kết quả chỉ lưu trên thiết bị này, không gửi kết quả cho BGK.' : '';
+      const tailNote = state.mode==='mock' ? ' . Kết quả chỉ lưu trên thiết bị này, không gửi kết quả cho BGK.' : '';
       if(actualNum < CONFIG.EXAM_QUESTION_COUNT){
         infoEl.innerHTML = `⚠️ Ngân hàng câu hỏi hiện chỉ có <strong>${state.questions.length}</strong> câu, ` +
-          `nên đề sẽ lấy toàn bộ <strong>${actualNum} câu</strong> này (đề chuẩn là 60 câu) · ` +
+          `nên đề sẽ lấy toàn bộ <strong>${actualNum} câu</strong> này (đề chuẩn là 60 câu) . ` +
           `Thời gian làm bài <strong>${CONFIG.EXAM_MINUTES} phút</strong>, hết giờ sẽ tự động nộp bài.${tailNote}`;
       } else {
         infoEl.innerHTML = `Đề gồm <strong>${CONFIG.EXAM_QUESTION_COUNT} câu</strong>, lấy ngẫu nhiên từ toàn bộ ` +
-          `ngân hàng câu hỏi theo chức danh đã chọn · Thời gian làm bài ` +
+          `ngân hàng câu hỏi theo chức danh đã chọn<br>. Thời gian làm bài ` +
           `<strong>${CONFIG.EXAM_MINUTES} phút</strong>, hết giờ sẽ tự động nộp bài.${tailNote}`;
       }
     }
