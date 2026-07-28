@@ -544,16 +544,16 @@
         </select>
 
         <p class="muted" id="examFixedInfo" style="margin-top:14px;">
-          . Đề gồm <strong>60 câu</strong>, lấy ngẫu nhiên từ toàn bộ ngân hàng câu hỏi theo chức danh đã chọn.<br>
-          . Thời gian làm bài <strong>60 phút</strong>, hết giờ sẽ tự động nộp bài.
+          · Đề thi gồm <strong>60 câu</strong>, lấy ngẫu nhiên từ toàn bộ ngân hàng câu hỏi theo chức danh đã chọn.<br>
+          · Thời gian làm bài <strong>60 phút</strong>, hết giờ sẽ tự động nộp bài.
         </p>
       </div>
 
       <div id="mockOpts" style="display:none;">
         <p class="muted" id="mockFixedInfo" style="margin-top:6px;">
-          . Đề gồm <strong>60 câu</strong>, lấy ngẫu nhiên từ toàn bộ ngân hàng câu hỏi theo chức danh đã chọn.<br>
-          . Thời gian làm bài <strong>60 phút</strong>, hết giờ sẽ tự động nộp bài.<br>
-          . Kết quả chỉ lưu trên thiết bị này, không gửi kết quả cho BGK.
+          · Đề thi gồm <strong>60 câu</strong>, lấy ngẫu nhiên từ toàn bộ ngân hàng câu hỏi theo chức danh đã chọn.<br>
+          · Thời gian làm bài <strong>60 phút</strong>, hết giờ sẽ tự động nộp bài.<br>
+          · Kết quả chỉ lưu trên thiết bị này, không gửi kết quả cho BGK.
         </p>
         <div class="card" style="margin-top:6px;">
           <h2 class="section-title" style="font-size:15px;">📊 Thống kê thi thử của bạn</h2>
@@ -1052,15 +1052,15 @@ document.querySelectorAll('.mode-btn').forEach(btn=>{
     if(state.mode === 'exam' || state.mode === 'mock'){
       const actualNum = Math.min(CONFIG.EXAM_QUESTION_COUNT, state.questions.length);
       const infoEl = document.getElementById(state.mode==='exam' ? 'examFixedInfo' : 'mockFixedInfo');
-      const tailNote = state.mode==='mock' ? '<br>. Kết quả chỉ lưu trên thiết bị này, không gửi kết quả cho BGK.' : '';
+      const tailNote = state.mode==='mock' ? '<br>· Kết quả chỉ lưu trên thiết bị này, không gửi kết quả cho BGK.' : '';
       if(actualNum < CONFIG.EXAM_QUESTION_COUNT){
         infoEl.innerHTML = `⚠️ Ngân hàng câu hỏi hiện chỉ có <strong>${state.questions.length}</strong> câu, ` +
           `nên đề sẽ lấy toàn bộ <strong>${actualNum} câu</strong> này (đề chuẩn là 60 câu) · ` +
           `Thời gian làm bài <strong>${CONFIG.EXAM_MINUTES} phút</strong>, hết giờ sẽ tự động nộp bài.${tailNote}`;
       } else {
-        infoEl.innerHTML = `. Đề gồm <strong>${CONFIG.EXAM_QUESTION_COUNT} câu</strong>, lấy ngẫu nhiên từ toàn bộ ` +
+        infoEl.innerHTML = `· Đề thi gồm <strong>${CONFIG.EXAM_QUESTION_COUNT} câu</strong>, lấy ngẫu nhiên từ toàn bộ ` +
           `ngân hàng câu hỏi theo chức danh đã chọn.<br>` +
-          `. Thời gian làm bài <strong>${CONFIG.EXAM_MINUTES} phút</strong>, hết giờ sẽ tự động nộp bài.${tailNote}`;
+          `· Thời gian làm bài <strong>${CONFIG.EXAM_MINUTES} phút</strong>, hết giờ sẽ tự động nộp bài.${tailNote}`;
       }
     }
     if(state.mode === 'mock'){
