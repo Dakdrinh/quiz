@@ -78,6 +78,19 @@
     font-family:var(--font-body); background:#fff; color:var(--ink);
   }
   .login-field input:focus{ outline:none; border-color:var(--navy); }
+  .login-pass-wrap{ position:relative; }
+  .login-pass-wrap input{ padding-right:42px; }
+  .login-pass-toggle{
+    position:absolute; top:50%; right:4px; transform:translateY(-50%);
+    width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+    background:transparent; border:none; cursor:pointer; color:var(--muted-ink, #6b7a8c);
+    padding:0; border-radius:8px;
+  }
+  .login-pass-toggle:hover{ color:var(--navy); background:rgba(11,46,79,0.06); }
+  .login-pass-toggle svg{ width:20px; height:20px; }
+  .login-pass-toggle .eye-off{ display:none; }
+  .login-pass-toggle.is-visible .eye-on{ display:none; }
+  .login-pass-toggle.is-visible .eye-off{ display:block; }
   .app.pre-auth header.top{ display:none; }
   .app.pre-auth .login-screen{ min-height:100vh; }
 
@@ -461,7 +474,20 @@
         </div>
         <div class="login-field">
           <label for="loginPass">Mật khẩu</label>
-          <input type="password" id="loginPass" autocomplete="current-password" placeholder="Nhập mật khẩu">
+          <div class="login-pass-wrap">
+            <input type="password" id="loginPass" autocomplete="current-password" placeholder="Nhập mật khẩu">
+            <button type="button" class="login-pass-toggle" id="loginPassToggle" aria-label="Hiện/ẩn mật khẩu" tabindex="-1">
+              <svg class="eye-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-3.22 3.22A9.12 9.12 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 4.06-5.94"/>
+                <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
+                <path d="M1 1l22 22"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div id="loginError"></div>
@@ -686,9 +712,8 @@ function getLoginSession(){
 }
 
 function saveLoginSession(username){
-  try{
-    localStorage.setItem(CONFIG.LOGIN_SESSION_KEY, JSON.stringify({ user: username, ts: new Date().toISOString() }));
-  }catch(e){ /* không lưu được, vẫn cho vào bình thường trong phiên hiện tại */ }
+  /* Đã bỏ duy trì đăng nhập: không lưu phiên vào localStorage nữa,
+     nên mỗi lần tải lại trang / mở lại app đều phải đăng nhập lại. */
 }
 
 function onLoginSuccess(){
@@ -761,6 +786,14 @@ function doLogin(){
     .finally(()=>{ loading.style.display = 'none'; });
 }
 
+document.getElementById('loginPassToggle').addEventListener('click', ()=>{
+  const passEl = document.getElementById('loginPass');
+  const btn = document.getElementById('loginPassToggle');
+  const show = passEl.type === 'password';
+  passEl.type = show ? 'text' : 'password';
+  btn.classList.toggle('is-visible', show);
+});
+
 document.getElementById('loginBtn').addEventListener('click', doLogin);
 document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key === 'Enter') doLogin(); });
 
@@ -771,7 +804,6 @@ document.getElementById('logoutBtn').addEventListener('click', ()=>{
     showLogoutBlockedNotice(q.type);
     return;
   }
-  try{ localStorage.removeItem(CONFIG.LOGIN_SESSION_KEY); }catch(e){}
   location.reload();
 });
 document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key === 'Enter') document.getElementById('loginPass').focus(); });
@@ -1510,15 +1542,11 @@ document.getElementById('restartBtn').addEventListener('click', ()=>{
   showScreen('screen-mode');
 });
 
-/* ---------------- Khởi động: vào thẳng nếu đã có phiên đăng nhập, ngược lại chờ ở màn hình đăng nhập ---------------- */
+/* ---------------- Khởi động: luôn yêu cầu đăng nhập lại (đã bỏ duy trì đăng nhập) ---------------- */
 (function initAuth(){
-  const session = getLoginSession();
-  if(session && session.user){
-    onLoginSuccess();
-  } else {
-    setAuthed(false);
-    showScreen('screen-login');
-  }
+  try{ localStorage.removeItem(CONFIG.LOGIN_SESSION_KEY); }catch(e){}
+  setAuthed(false);
+  showScreen('screen-login');
 })();
 </script>
 </body>
