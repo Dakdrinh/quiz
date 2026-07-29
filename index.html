@@ -687,8 +687,9 @@ const CONFIG = {
   // Khoá lưu phiên đăng nhập trong localStorage (đổi hậu tố _v1 nếu muốn buộc mọi người đăng nhập lại 1 lần)
   LOGIN_SESSION_KEY: "quizLoginSession_v1"
 };
-/* Mẫu Template EmailJS cần các biến: to_email, candidate_name, category,
-   start_time, end_time, duration, score, total, percent  */
+/* Mẫu Template EmailJS cần các biến: to_email, candidate_name, candidate_dob,
+   candidate_cccd, candidate_dept, position, start_time, end_time, duration,
+   score, total, percent  */
 /* ====================================================================== */
 
 document.getElementById('appTitle').innerHTML = CONFIG.APP_TITLE_LINE1 + '<br>' + CONFIG.APP_TITLE_LINE2;
@@ -1186,7 +1187,7 @@ document.getElementById('startBtn').addEventListener('click', ()=>{
       candidateDob: state.mode==='exam' ? document.getElementById('examDob').value.trim() : '',
       candidateCccd: state.mode==='exam' ? document.getElementById('examCccd').value.trim() : '',
       candidateDept: state.mode==='exam' ? document.getElementById('examDept').value : '',
-      categoryLabel: 'Tất cả (ngẫu nhiên)',
+      categoryLabel: state.selectedTitle || 'Chưa xác định',
       startTime: new Date(),
       endTimeLimit: new Date(Date.now() + minutes*60000),
       timerInterval: null,
@@ -1470,7 +1471,7 @@ function finishExam(byTimeout){
       <tr><td>Số CCCD</td><td>${q.candidateCccd}</td></tr>
       <tr><td>Phòng ban / Phân xưởng</td><td>${q.candidateDept}</td></tr>
     ` : ''}
-    <tr><td>Chuyên môn</td><td>${q.categoryLabel}</td></tr>
+    <tr><td>Chức danh</td><td>${q.categoryLabel}</td></tr>
     <tr><td>Bắt đầu</td><td>${fmt(q.startTime)}</td></tr>
     <tr><td>Kết thúc</td><td>${fmt(endTime)}</td></tr>
     <tr><td>Thời gian làm bài</td><td>${durationStr}</td></tr>
@@ -1507,7 +1508,7 @@ function sendResultEmail(q, endTime, durationStr, pct){
     candidate_dob: q.candidateDob,     // Truyền Ngày sinh riêng
     candidate_cccd: q.candidateCccd,   // Truyền CCCD riêng
     candidate_dept: q.candidateDept,   // Truyền Phòng ban riêng
-    category: q.categoryLabel,
+    position: q.categoryLabel,
     start_time: q.startTime.toLocaleString('vi-VN'),
     end_time: endTime.toLocaleString('vi-VN'),
     duration: durationStr,
