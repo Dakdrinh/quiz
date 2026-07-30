@@ -542,7 +542,10 @@
       </div>
 
       <div id="practiceOpts" style="display:none;">
-        <label class="field-label">Vui lòng chọn chuyên môn để luyện tập (Bỏ trống nghĩa là chọn tất cả)</label>
+        <label class="field-label">Vui lòng chọn chuyên môn</label>
+        <div class="btn-row" style="margin-bottom:8px;">
+          <button type="button" class="btn btn-outline" id="selectAllCatsBtn" style="font-size:12.5px; padding:8px 12px;">✅ Chọn tất cả</button>
+        </div>
         <div class="chip-group" id="practiceCats"></div>
         <p class="muted" id="practiceCountInfo" style="margin-top:8px;"></p>
       </div>
@@ -978,7 +981,7 @@ function buildTitleChips(){
     chip.addEventListener('click', ()=> selectTitle(t));
     wrap.appendChild(chip);
   });
-  document.getElementById('titleMeta').textContent = 'Vui lòng chọn chức danh của bạn để tiếp tục';
+  document.getElementById('titleMeta').textContent = 'Vui lòng chọn chức danh của bạn';
 }
 
 function selectTitle(title){
@@ -1070,14 +1073,40 @@ function buildChipGroup(containerId, selectedSet){
     chip.addEventListener('click', ()=>{
       if(selectedSet.has(cat)){ selectedSet.delete(cat); chip.classList.remove('sel'); }
       else { selectedSet.add(cat); chip.classList.add('sel'); }
+      updateSelectAllCatsBtn();
       validateStart();
     });
     wrap.appendChild(chip);
   });
+  updateSelectAllCatsBtn();
+}
+
+function updateSelectAllCatsBtn(){
+  const btn = document.getElementById('selectAllCatsBtn');
+  if(!btn) return;
+  const allSelected = state.categories.length > 0 &&
+    state.categories.every(cat => state.practiceCats.has(cat));
+  btn.textContent = allSelected ? '❌ Bỏ chọn tất cả' : '✅ Chọn tất cả';
 }
 
 document.getElementById('backToTitle').addEventListener('click', ()=>{
   showScreen('screen-title');
+});
+
+document.getElementById('selectAllCatsBtn').addEventListener('click', ()=>{
+  const allSelected = state.categories.length > 0 &&
+    state.categories.every(cat => state.practiceCats.has(cat));
+  const wrap = document.getElementById('practiceCats');
+  const chips = wrap ? wrap.querySelectorAll('.chip') : [];
+  if(allSelected){
+    state.practiceCats.clear();
+    chips.forEach(chip => chip.classList.remove('sel'));
+  } else {
+    state.categories.forEach(cat => state.practiceCats.add(cat));
+    chips.forEach(chip => chip.classList.add('sel'));
+  }
+  updateSelectAllCatsBtn();
+  validateStart();
 });
 
 /* ---------------- Step 2: Mode select ---------------- */
