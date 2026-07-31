@@ -376,6 +376,12 @@
     font-size:52px; font-weight:700; color:var(--navy); line-height:1;
   }
   .result-score .lbl{ color:#7c8894; font-size:13px; margin-top:6px; }
+  .result-badge{
+    display:inline-block; margin-top:12px; padding:6px 18px; border-radius:999px;
+    font-size:13.5px; font-weight:700; letter-spacing:.02em;
+  }
+  .result-badge.pass{ background:#eef9f1; color:var(--good); }
+  .result-badge.fail{ background:#fdf1ef; color:var(--bad); }
   .result-table{ width:100%; border-collapse:collapse; margin-top:18px; font-size:13.5px;}
   .result-table td{ padding:9px 4px; border-bottom:1px solid var(--line); }
   .result-table td:first-child{ color:#7c8894; }
@@ -640,9 +646,11 @@
         <div class="result-score">
           <div class="big" id="resultScoreText">0/0</div>
           <div class="lbl" id="resultPercent">0%</div>
+          <div id="resultBadge"></div>
         </div>
         <table class="result-table" id="resultTable"></table>
         <div id="emailStatus"></div>
+        <div id="sheetStatus"></div>
       </div>
       <div class="card" id="mockStatsResultWrap" style="display:none;">
         <h2 class="section-title" style="font-size:15px;">📊 Thống kê thi thử của bạn</h2>
@@ -689,11 +697,21 @@ const CONFIG = {
   LOGIN_CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRyf02269mgSVwgPWBDfExiKL_B9AI_DlwtIR7IUQ960cdCCmtHfTVGqYkas1h7T3Qismh6ajGaLxc2/pub?gid=0&single=true&output=csv",
 
   // Khoá lưu phiên đăng nhập trong localStorage (đổi hậu tố _v1 nếu muốn buộc mọi người đăng nhập lại 1 lần)
-  LOGIN_SESSION_KEY: "quizLoginSession_v1"
+  LOGIN_SESSION_KEY: "quizLoginSession_v1",
+
+  // Link "Web app URL" của Google Apps Script (xem hướng dẫn deploy trong file Code.gs đi kèm).
+  // Dùng để tự động ghi kết quả thi vào Google Sheet tổng hợp cho ban giám khảo.
+  // Để trống ("") nếu chưa muốn bật tính năng lưu Sheet.
+  SHEET_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbzkaY8TmDIsvNHF_x-9KSxxMYJvI9R-YX5TeBBENPKVo582ZuVQhWMONgQeIyFj52WqnA/exec",
+
+  // Quy đổi điểm: tổng số câu của bài thi (EXAM_QUESTION_COUNT) tương ứng thang điểm 10.
+  // Ví dụ 60 câu đúng hết = 10 điểm. Mốc đạt là 7.0 điểm.
+  EXAM_MAX_SCORE10: 10,
+  EXAM_PASS_SCORE10: 7.0
 };
 /* Mẫu Template EmailJS cần các biến: to_email, candidate_name, candidate_dob,
    candidate_cccd, candidate_dept, position, start_time, end_time, duration,
-   score, total, percent  */
+   score, total, percent, score10, result_status  */
 /* ====================================================================== */
 
 document.getElementById('appTitle').innerHTML = CONFIG.APP_TITLE_LINE1 + '<br>' + CONFIG.APP_TITLE_LINE2;
@@ -1472,6 +1490,8 @@ function finishPractice(){
   document.getElementById('resultPercent').textContent = pct + '%';
   document.getElementById('resultTable').innerHTML = '';
   document.getElementById('emailStatus').innerHTML = '';
+  document.getElementById('sheetStatus').innerHTML = '';
+  document.getElementById('resultBadge').innerHTML = '';
   document.getElementById('mockStatsResultWrap').style.display = 'none';
   showScreen('screen-result');
 }
@@ -1497,6 +1517,16 @@ function finishExam(byTimeout){
   document.getElementById('resultScoreText').textContent = `${q.score}/${q.questions.length}`;
   document.getElementById('resultPercent').textContent = pct + '%';
 
+  // Quy đổi điểm hệ 10 và xét đạt/không đạt (chỉ áp dụng cho bài thi thật, chức năng thi thử vẫn hiển thị để tham khảo)
+  const score10 = Math.round((q.score / q.questions.length) * CONFIG.EXAM_MAX_SCORE10 * 100) / 100;
+  const isPass = score10 >= CONFIG.EXAM_PASS_SCORE10;
+  const badgeEl = document.getElementById('resultBadge');
+  if(q.type === 'exam'){
+    badgeEl.innerHTML = `<span class="result-badge ${isPass?'pass':'fail'}">${score10.toFixed(2)} điểm · ${isPass?'ĐẠT':'KHÔNG ĐẠT'}</span>`;
+  } else {
+    badgeEl.innerHTML = '';
+  }
+
   const fmt = d => d.toLocaleString('vi-VN');
   
   // Bổ sung các cột thông tin mới hiển thị ngoài màn hình kết quả thi
@@ -1511,16 +1541,22 @@ function finishExam(byTimeout){
     <tr><td>Bắt đầu</td><td>${fmt(q.startTime)}</td></tr>
     <tr><td>Kết thúc</td><td>${fmt(endTime)}</td></tr>
     <tr><td>Thời gian làm bài</td><td>${durationStr}</td></tr>
+    ${q.type==='exam' ? `
+      <tr><td>Điểm (hệ 10)</td><td>${score10.toFixed(2)}</td></tr>
+      <tr><td>Đánh giá</td><td>${isPass?'Đạt':'Không đạt'}</td></tr>
+    ` : ''}
   `;
 
   const statusBox = document.getElementById('emailStatus');
   const statsWrap = document.getElementById('mockStatsResultWrap');
   if(q.type === 'exam'){
     statsWrap.style.display = 'none';
-    sendResultEmail(q, endTime, durationStr, pct);
+    sendResultEmail(q, endTime, durationStr, pct, score10, isPass);
+    sendResultToSheet(q, endTime, durationStr, pct, score10, isPass);
   } else {
     // Thi thử: không gửi email, chỉ lưu và hiển thị thống kê trên thiết bị
     statusBox.innerHTML = '';
+    document.getElementById('sheetStatus').innerHTML = '';
     saveMockAttempt({ date: fmt(endTime), score: q.score, total: q.questions.length, percent: pct });
     statsWrap.style.display = 'block';
     document.getElementById('mockStatsResultBody').innerHTML = mockStatsHtml();
@@ -1529,7 +1565,7 @@ function finishExam(byTimeout){
   showScreen('screen-result');
 }
 
-function sendResultEmail(q, endTime, durationStr, pct){
+function sendResultEmail(q, endTime, durationStr, pct, score10, isPass){
   const statusBox = document.getElementById('emailStatus');
   if(!window.emailjs || CONFIG.EMAILJS_PUBLIC_KEY.startsWith('YOUR_')){
     statusBox.innerHTML = `<div class="status-msg error">⚠️ Chưa cấu hình EmailJS nên không thể gửi kết quả tự động. Vui lòng báo quản trị cấu hình mục CONFIG trong file HTML.</div>`;
@@ -1550,7 +1586,9 @@ function sendResultEmail(q, endTime, durationStr, pct){
     duration: durationStr,
     score: q.score,
     total: q.questions.length,
-    percent: pct
+    percent: pct,
+    score10: score10.toFixed(2),           // Điểm quy đổi hệ 10
+    result_status: isPass ? 'Đạt' : 'Không đạt'   // Đánh giá đạt/không đạt
   };
 
   emailjs.send(CONFIG.EMAILJS_SERVICE_ID, CONFIG.EMAILJS_TEMPLATE_ID, params)
@@ -1560,6 +1598,48 @@ function sendResultEmail(q, endTime, durationStr, pct){
     .catch((err)=>{
       statusBox.innerHTML = `<div class="status-msg error">❌ Gửi email thất bại: ${err.text||err.message||err}</div>`;
     });
+}
+
+// Ghi kết quả thi vào Google Sheet tổng hợp thông qua Google Apps Script Web App (xem file Code.gs đi kèm).
+// Vì Apps Script Web App không trả về header CORS cho phép đọc response từ trình duyệt,
+// nên ở đây dùng chế độ 'no-cors': request vẫn được gửi và ghi vào Sheet bình thường,
+// chỉ là JS không đọc được nội dung phản hồi (mặc định coi là đã gửi nếu không có lỗi mạng).
+function sendResultToSheet(q, endTime, durationStr, pct, score10, isPass){
+  const sheetStatusBox = document.getElementById('sheetStatus');
+  if(!CONFIG.SHEET_WEBAPP_URL || CONFIG.SHEET_WEBAPP_URL.startsWith('YOUR_')){
+    if(sheetStatusBox) sheetStatusBox.innerHTML = `<div class="status-msg error">⚠️ Chưa cấu hình SHEET_WEBAPP_URL nên không thể lưu vào file tổng hợp.</div>`;
+    return;
+  }
+  if(sheetStatusBox) sheetStatusBox.innerHTML = `<div class="status-msg sending">📊 Đang lưu vào file tổng hợp...</div>`;
+
+  const payload = {
+    candidate_name: q.candidateName,
+    candidate_dob: q.candidateDob,
+    candidate_cccd: q.candidateCccd,
+    candidate_dept: q.candidateDept,
+    position: q.categoryLabel,
+    start_time: q.startTime.toLocaleString('vi-VN'),
+    end_time: endTime.toLocaleString('vi-VN'),
+    duration: durationStr,
+    score: q.score,
+    total: q.questions.length,
+    percent: pct,
+    score10: score10.toFixed(2),
+    result_status: isPass ? 'Đạt' : 'Không đạt'
+  };
+
+  fetch(CONFIG.SHEET_WEBAPP_URL, {
+    method: 'POST',
+    mode: 'no-cors',                              // Bắt buộc để tránh lỗi CORS khi gọi Apps Script từ trình duyệt
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },  // text/plain để không kích hoạt preflight CORS
+    body: JSON.stringify(payload)
+  })
+  .then(()=>{
+    if(sheetStatusBox) sheetStatusBox.innerHTML = `<div class="status-msg sent">✅ Đã lưu vào file tổng hợp Google Sheet.</div>`;
+  })
+  .catch((err)=>{
+    if(sheetStatusBox) sheetStatusBox.innerHTML = `<div class="status-msg error">❌ Lưu vào Sheet thất bại: ${err.message||err}</div>`;
+  });
 }
 
 document.getElementById('restartBtn').addEventListener('click', ()=>{
