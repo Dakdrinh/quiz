@@ -168,6 +168,9 @@
   /* Màn hình hẹp (điện thoại): tách "Đăng xuất" lên hàng trên cùng logo,
      để dòng tiêu đề được chiếm trọn 1 hàng riêng, có đủ chỗ hiển thị 2 dòng. */
   @media (max-width: 480px){
+    header.top{
+      padding-right:14px;
+    }
     header.top .header-inner{
       grid-template-columns:auto 1fr;
       grid-template-areas:
@@ -176,8 +179,9 @@
       row-gap:10px;
     }
     header.top .logout-btn{
-      margin-top:0;
-      align-self:center;
+      margin-top:-10px;
+      margin-right:-8px;
+      align-self:start;
     }
     header.top h1{
       font-size:clamp(14px, 5.6vw, 20px);
