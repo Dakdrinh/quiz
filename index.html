@@ -560,6 +560,21 @@
         <p class="muted" id="practiceCountInfo" style="margin-top:8px;"></p>
       </div>
 
+      <div id="gradeOpts" style="display:none;">
+        <label class="field-label">Hình thức thi</label>
+        <select id="examType">
+          <option value="">-- Chọn hình thức thi --</option>
+          <option value="Giữ bậc">Giữ bậc</option>
+          <option value="Nâng bậc">Nâng bậc</option>
+        </select>
+
+        <label class="field-label" style="margin-top:10px;">Bậc thi</label>
+        <select id="examLevel">
+          <option value="">-- Chọn bậc thi --</option>
+        </select>
+        <p class="muted" id="gradeCountInfo" style="margin-top:6px;"></p>
+      </div>
+
       <div id="examOpts" style="display:none;">
         <label class="field-label">Họ và tên người dự thi</label>
         <input type="text" id="examName" placeholder="VD: Nguyễn Văn A">
@@ -915,13 +930,21 @@ function parseSheetRows(rows){
     // Cột Chức danh (field 'title'): nhiều chức danh cách nhau bằng dấu ';'. Để trống = áp dụng cho TẤT CẢ chức danh.
     const titleRaw = headerMap['title']!==undefined ? String(row[headerMap['title']]||'').trim() : '';
     const titles = titleRaw ? titleRaw.split(';').map(s=>s.trim()).filter(Boolean) : [];
+    // Cột I: loại thi áp dụng (field 'examtype') — giá trị "Giữ bậc" / "Nâng bậc", nhiều loại cách nhau bằng ';'. Để trống = áp dụng cho cả hai loại.
+    const examTypeRaw = headerMap['examtype']!==undefined ? String(row[headerMap['examtype']]||'').trim() : '';
+    const examTypes = examTypeRaw ? examTypeRaw.split(';').map(s=>s.trim()).filter(Boolean) : [];
+    // Cột D: bậc áp dụng (field 'level'), nhiều bậc cách nhau bằng ';'. Để trống = áp dụng cho tất cả các bậc.
+    const levelRaw = headerMap['level']!==undefined ? String(row[headerMap['level']]||'').trim() : '';
+    const levels = levelRaw ? levelRaw.split(';').map(s=>s.trim()).filter(Boolean) : [];
     questions.push({
       category: category || 'Chưa phân loại',
       difficulty: difficulty,
       content: String(content).trim(),
       options: [opt1,opt2,opt3,opt4],
       correct: result,
-      titles: titles
+      titles: titles,
+      examTypes: examTypes,
+      levels: levels
     });
   }
   if(questions.length === 0){
@@ -1013,6 +1036,10 @@ function selectTitle(title){
   document.querySelectorAll('#titleChips .chip').forEach(c=>{
     c.classList.toggle('sel', c.textContent.startsWith(title + ' ('));
   });
+  // Đổi chức danh -> reset lựa chọn hình thức thi / bậc thi vì danh sách bậc có thể khác nhau theo chức danh
+  document.getElementById('examType').value = '';
+  document.getElementById('examLevel').innerHTML = '<option value="">-- Chọn bậc thi --</option>';
+  if(state.mode === 'exam' || state.mode === 'mock') updateGradeFixedInfo();
   onBankLoaded(title);
 }
 
@@ -1138,27 +1165,75 @@ document.querySelectorAll('.mode-btn').forEach(btn=>{
     btn.classList.add('sel');
     state.mode = btn.dataset.mode;
     document.getElementById('practiceOpts').style.display = state.mode==='practice' ? 'block' : 'none';
+    document.getElementById('gradeOpts').style.display = (state.mode==='exam' || state.mode==='mock') ? 'block' : 'none';
     document.getElementById('examOpts').style.display = state.mode==='exam' ? 'block' : 'none';
     document.getElementById('mockOpts').style.display = state.mode==='mock' ? 'block' : 'none';
     if(state.mode === 'exam' || state.mode === 'mock'){
-      const actualNum = Math.min(CONFIG.EXAM_QUESTION_COUNT, state.questions.length);
-      const infoEl = document.getElementById(state.mode==='exam' ? 'examFixedInfo' : 'mockFixedInfo');
-      const tailNote = state.mode==='mock' ? '<br>· Kết quả chỉ lưu trên thiết bị này, không gửi kết quả cho BGK.' : '';
-      if(actualNum < CONFIG.EXAM_QUESTION_COUNT){
-        infoEl.innerHTML = `⚠️ Ngân hàng câu hỏi hiện chỉ có <strong>${state.questions.length}</strong> câu, ` +
-          `nên đề sẽ lấy toàn bộ <strong>${actualNum} câu</strong> này (đề chuẩn là 60 câu) · ` +
-          `Thời gian làm bài <strong>${CONFIG.EXAM_MINUTES} phút</strong>, hết giờ sẽ tự động nộp bài.${tailNote}`;
-      } else {
-        infoEl.innerHTML = `· Đề thi gồm <strong>${CONFIG.EXAM_QUESTION_COUNT} câu</strong>, lấy ngẫu nhiên từ toàn bộ ` +
-          `ngân hàng câu hỏi theo chức danh đã chọn.<br>` +
-          `· Thời gian làm bài <strong>${CONFIG.EXAM_MINUTES} phút</strong>, hết giờ sẽ tự động nộp bài.${tailNote}`;
-      }
+      populateExamLevels();
+      updateGradeFixedInfo();
     }
     if(state.mode === 'mock'){
       renderMockStats();
     }
     validateStart();
   });
+});
+
+/* ---------------- Chọn hình thức thi (Giữ bậc / Nâng bậc) và bậc thi ---------------- */
+// Trả về danh sách câu hỏi (trong state.questions, đã lọc theo chức danh) phù hợp với hình thức thi / bậc thi đang chọn.
+// Bỏ qua điều kiện nào chưa được chọn (examType hoặc level rỗng nghĩa là chưa lọc theo điều kiện đó).
+function gradeFilteredQuestions(examType, level){
+  return state.questions.filter(q=>{
+    const okType = !examType || q.examTypes.length===0 || q.examTypes.includes(examType);
+    const okLevel = !level || q.levels.length===0 || q.levels.includes(level);
+    return okType && okLevel;
+  });
+}
+
+// Dựng lại danh sách lựa chọn "Bậc thi" dựa trên hình thức thi đã chọn (và chức danh hiện tại).
+function populateExamLevels(){
+  const examType = document.getElementById('examType').value;
+  const levelSelect = document.getElementById('examLevel');
+  const prevSelected = levelSelect.value;
+  const pool = gradeFilteredQuestions(examType, '');
+  const levelSet = new Set();
+  pool.forEach(q => q.levels.forEach(l=>levelSet.add(l)));
+  const levels = [...levelSet].sort((a,b)=>a.localeCompare(b,'vi',{numeric:true}));
+  levelSelect.innerHTML = '<option value="">-- Chọn bậc thi --</option>' +
+    levels.map(l=>`<option value="${l}">${l}</option>`).join('');
+  if(levels.includes(prevSelected)) levelSelect.value = prevSelected;
+}
+
+function updateGradeFixedInfo(){
+  const examType = document.getElementById('examType').value;
+  const level = document.getElementById('examLevel').value;
+  const pool = gradeFilteredQuestions(examType, level);
+  const actualNum = Math.min(CONFIG.EXAM_QUESTION_COUNT, pool.length);
+  const infoEl = document.getElementById(state.mode==='exam' ? 'examFixedInfo' : 'mockFixedInfo');
+  const tailNote = state.mode==='mock' ? '<br>· Kết quả chỉ lưu trên thiết bị này, không gửi kết quả cho BGK.' : '';
+  if(!examType || !level){
+    infoEl.innerHTML = `⚠️ Vui lòng chọn hình thức thi và bậc thi ở trên trước.${tailNote}`;
+  } else if(pool.length === 0){
+    infoEl.innerHTML = `⚠️ Ngân hàng câu hỏi hiện chưa có câu nào cho hình thức <strong>${examType}</strong>, bậc <strong>${level}</strong>.${tailNote}`;
+  } else if(actualNum < CONFIG.EXAM_QUESTION_COUNT){
+    infoEl.innerHTML = `⚠️ Với hình thức <strong>${examType}</strong>, bậc <strong>${level}</strong>, ngân hàng câu hỏi chỉ có <strong>${pool.length}</strong> câu, ` +
+      `nên đề sẽ lấy toàn bộ <strong>${actualNum} câu</strong> này (đề chuẩn là 60 câu) · ` +
+      `Thời gian làm bài <strong>${CONFIG.EXAM_MINUTES} phút</strong>, hết giờ sẽ tự động nộp bài.${tailNote}`;
+  } else {
+    infoEl.innerHTML = `· Đề thi gồm <strong>${CONFIG.EXAM_QUESTION_COUNT} câu</strong>, lấy ngẫu nhiên từ ngân hàng câu hỏi theo chức danh, ` +
+      `hình thức <strong>${examType}</strong> và bậc <strong>${level}</strong> đã chọn.<br>` +
+      `· Thời gian làm bài <strong>${CONFIG.EXAM_MINUTES} phút</strong>, hết giờ sẽ tự động nộp bài.${tailNote}`;
+  }
+}
+
+document.getElementById('examType').addEventListener('change', ()=>{
+  populateExamLevels();
+  updateGradeFixedInfo();
+  validateStart();
+});
+document.getElementById('examLevel').addEventListener('change', ()=>{
+  updateGradeFixedInfo();
+  validateStart();
 });
 
 // Gắn trình lắng nghe sự kiện kiểm tra hợp lệ cho các input mới
@@ -1206,12 +1281,20 @@ function validateStart(){
     const dob = document.getElementById('examDob').value.trim();
     const cccd = document.getElementById('examCccd').value.trim();
     const dept = document.getElementById('examDept').value;
+    const examType = document.getElementById('examType').value;
+    const level = document.getElementById('examLevel').value;
+    const gradeCount = examType && level ? gradeFilteredQuestions(examType, level).length : 0;
     
     // Kiểm tra CCCD phải là số và đủ 12 ký tự
     const isCccdValid = /^\d{12}$/.test(cccd);
     
-    // Nút bắt đầu chỉ sáng khi điền đủ tên, đúng định dạng ngày sinh, đủ 12 số CCCD và chọn phòng ban
-    btn.disabled = !(state.questions.length > 0 && name.length > 0 && isValidDate(dob) && isCccdValid && dept.length > 0);
+    // Nút bắt đầu chỉ sáng khi điền đủ tên, đúng định dạng ngày sinh, đủ 12 số CCCD, chọn phòng ban, hình thức thi và bậc thi
+    btn.disabled = !(gradeCount > 0 && name.length > 0 && isValidDate(dob) && isCccdValid && dept.length > 0);
+  } else if(state.mode === 'mock'){
+    const examType = document.getElementById('examType').value;
+    const level = document.getElementById('examLevel').value;
+    const gradeCount = examType && level ? gradeFilteredQuestions(examType, level).length : 0;
+    btn.disabled = !(gradeCount > 0);
   } else {
     btn.disabled = !(state.questions.length>0);
   }
@@ -1235,8 +1318,11 @@ document.getElementById('startBtn').addEventListener('click', ()=>{
       type:'practice', questions:pool, index:0, score:0, answered:false, selected:null
     };
   } else {
-    const targetNum = Math.min(CONFIG.EXAM_QUESTION_COUNT, state.questions.length);
-    const pool = shuffle(state.questions).slice(0, targetNum);
+    const examType = document.getElementById('examType').value;
+    const level = document.getElementById('examLevel').value;
+    const gradeSource = gradeFilteredQuestions(examType, level);
+    const targetNum = Math.min(CONFIG.EXAM_QUESTION_COUNT, gradeSource.length);
+    const pool = shuffle(gradeSource).slice(0, targetNum);
     const minutes = CONFIG.EXAM_MINUTES;
     state.quiz = {
       type: state.mode, questions:pool, index:0, score:0,
@@ -1246,6 +1332,8 @@ document.getElementById('startBtn').addEventListener('click', ()=>{
       candidateCccd: state.mode==='exam' ? document.getElementById('examCccd').value.trim() : '',
       candidateDept: state.mode==='exam' ? document.getElementById('examDept').value : '',
       categoryLabel: state.selectedTitle || 'Chưa xác định',
+      examType: examType,
+      examLevel: level,
       startTime: new Date(),
       endTimeLimit: new Date(Date.now() + minutes*60000),
       timerInterval: null,
@@ -1542,6 +1630,8 @@ function finishExam(byTimeout){
       <tr><td>Phòng ban / Phân xưởng</td><td>${q.candidateDept}</td></tr>
     ` : ''}
     <tr><td>Chức danh</td><td>${q.categoryLabel}</td></tr>
+    <tr><td>Hình thức thi</td><td>${q.examType||''}</td></tr>
+    <tr><td>Bậc thi</td><td>${q.examLevel||''}</td></tr>
     <tr><td>Bắt đầu</td><td>${fmt(q.startTime)}</td></tr>
     <tr><td>Kết thúc</td><td>${fmt(endTime)}</td></tr>
     <tr><td>Thời gian làm bài</td><td>${durationStr}</td></tr>
@@ -1585,6 +1675,8 @@ function sendResultEmail(q, endTime, durationStr, pct, score10, isPass){
     candidate_cccd: q.candidateCccd,   // Truyền CCCD riêng
     candidate_dept: q.candidateDept,   // Truyền Phòng ban riêng
     position: q.categoryLabel,
+    exam_type: q.examType || '',       // Hình thức thi: Giữ bậc / Nâng bậc
+    exam_level: q.examLevel || '',     // Bậc thi
     start_time: q.startTime.toLocaleString('vi-VN'),
     end_time: endTime.toLocaleString('vi-VN'),
     duration: durationStr,
@@ -1622,6 +1714,8 @@ function sendResultToSheet(q, endTime, durationStr, pct, score10, isPass){
     candidate_cccd: q.candidateCccd,
     candidate_dept: q.candidateDept,
     position: q.categoryLabel,
+    exam_type: q.examType || '',
+    exam_level: q.examLevel || '',
     start_time: q.startTime.toLocaleString('vi-VN'),
     end_time: endTime.toLocaleString('vi-VN'),
     duration: durationStr,
@@ -1652,12 +1746,15 @@ document.getElementById('restartBtn').addEventListener('click', ()=>{
   state.quiz = null;
   document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('sel'));
   document.getElementById('practiceOpts').style.display='none';
+  document.getElementById('gradeOpts').style.display='none';
   document.getElementById('examOpts').style.display='none';
   document.getElementById('mockOpts').style.display='none';
   document.getElementById('examName').value='';
   document.getElementById('examDob').value='';
   document.getElementById('examCccd').value='';
   document.getElementById('examDept').value='';
+  document.getElementById('examType').value='';
+  document.getElementById('examLevel').innerHTML = '<option value="">-- Chọn bậc thi --</option>';
   buildChipGroup('practiceCats', state.practiceCats);
   validateStart();
   showScreen('screen-mode');
