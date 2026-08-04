@@ -576,6 +576,7 @@
       </div>
 
       <div id="examOpts" style="display:none;">
+        <p class="muted" id="examAccountNote" style="margin:0 0 10px;"></p>
         <label class="field-label">Họ và tên người dự thi</label>
         <input type="text" id="examName" placeholder="VD: Nguyễn Văn A">
         
@@ -620,6 +621,7 @@
       <div class="btn-row">
         <button class="btn btn-outline" id="backToTitle">← Đổi chức danh</button>
         <button class="btn btn-primary" id="startBtn" disabled>Bắt đầu</button>
+        <p class="muted" id="examLockStatus" style="margin-top:8px;"></p>
       </div>
     </section>
 
@@ -712,11 +714,17 @@ const CONFIG = {
   EXAM_MINUTES: 60,
 
   // Link CSV công khai của Google Sheet chứa danh sách tài khoản đăng nhập (File > Chia sẻ > Xuất bản lên web > CSV).
-  // Sheet cần có dòng tiêu đề với 2 cột: username, password (không phân biệt hoa/thường tên cột).
+  // Sheet cần có dòng tiêu đề với 2 cột bắt buộc: username, password (không phân biệt hoa/thường).
+  // Có thể bổ sung thêm các cột tuỳ chọn để tự động điền + khoá thông tin thi:
+  //   fullname (Họ và tên), dob (Ngày sinh, định dạng dd/mm/yyyy), cccd (Số CCCD), dept (Phòng ban/Phân xưởng - phải khớp đúng 1 trong các lựa chọn ở ô "Phòng ban")
   LOGIN_CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRyf02269mgSVwgPWBDfExiKL_B9AI_DlwtIR7IUQ960cdCCmtHfTVGqYkas1h7T3Qismh6ajGaLxc2/pub?gid=0&single=true&output=csv",
 
   // Khoá lưu phiên đăng nhập trong localStorage (đổi hậu tố _v1 nếu muốn buộc mọi người đăng nhập lại 1 lần)
   LOGIN_SESSION_KEY: "quizLoginSession_v1",
+
+  // Link "Web app URL" của Google Apps Script RIÊNG, dùng để giới hạn mỗi tài khoản chỉ được làm bài "Thi chính thức" 1 lần/ngày.
+  // Đây là 1 Apps Script độc lập, không liên quan tới SHEET_WEBAPP_URL bên dưới. Để trống ("") nếu chưa muốn bật giới hạn này.
+  EXAM_LOCK_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbygtUQxOSCaxP1kwoZcVfJcr1pb7lNMaZXpCkUhT56NiVA-733LjUGLvzjbHcOa2LG4/exec",
 
   // Link "Web app URL" của Google Apps Script (xem hướng dẫn deploy trong file Code.gs đi kèm).
   // Dùng để tự động ghi kết quả thi vào Google Sheet tổng hợp cho ban giám khảo.
@@ -766,6 +774,7 @@ function onLoginSuccess(){
 
 // Tải danh sách tài khoản từ Google Sheet (CSV) và kiểm tra khớp username/password.
 // Sheet cần 1 dòng tiêu đề với cột "username" và "password" (không phân biệt hoa/thường).
+// Trả về { ok:boolean, account:{fullname,dob,cccd,dept} } — account chỉ có giá trị khi Sheet có các cột tương ứng.
 function checkLoginAgainstSheet(username, password){
   const sep = CONFIG.LOGIN_CSV_URL.includes('?') ? '&' : '?';
   return fetch(CONFIG.LOGIN_CSV_URL + sep + '_cb=' + Date.now())
@@ -782,6 +791,7 @@ function checkLoginAgainstSheet(username, password){
         throw new Error("Sheet tài khoản thiếu cột 'username' hoặc 'password'.");
       }
       const uIdx = headerMap['username'], pIdx = headerMap['password'];
+      const get = (row, key) => headerMap[key]!==undefined ? String(row[headerMap[key]]||'').trim() : '';
       for(let i=1;i<rows.length;i++){
         const row = rows[i];
         if(!row || row[uIdx] === undefined) continue;
@@ -789,10 +799,16 @@ function checkLoginAgainstSheet(username, password){
         const rowPass = String(row[pIdx]||'').trim();
         if(!rowUser) continue;
         if(rowUser.toLowerCase() === username.toLowerCase() && rowPass === password){
-          return true;
+          const account = {
+            fullname: get(row,'fullname'),
+            dob: get(row,'dob'),
+            cccd: get(row,'cccd'),
+            dept: get(row,'dept')
+          };
+          return { ok:true, account };
         }
       }
-      return false;
+      return { ok:false, account:null };
     });
 }
 
@@ -814,8 +830,10 @@ function doLogin(){
   }
   loading.style.display = 'block';
   checkLoginAgainstSheet(username, password)
-    .then(ok=>{
-      if(ok){
+    .then(result=>{
+      if(result.ok){
+        state.username = username;
+        state.account = result.account;
         saveLoginSession(username);
         onLoginSuccess();
       } else {
@@ -852,6 +870,8 @@ document.getElementById('loginUser').addEventListener('keydown', e=>{ if(e.key =
 
 const LETTERS = ['A','B','C','D'];
 let state = {
+  username: '',
+  account: null,
   questions: [],
   categories: [],
   mode: null,
@@ -1168,6 +1188,7 @@ document.querySelectorAll('.mode-btn').forEach(btn=>{
     document.getElementById('gradeOpts').style.display = (state.mode==='exam' || state.mode==='mock') ? 'block' : 'none';
     document.getElementById('examOpts').style.display = state.mode==='exam' ? 'block' : 'none';
     document.getElementById('mockOpts').style.display = state.mode==='mock' ? 'block' : 'none';
+    if(state.mode === 'exam') applyAccountToExamFields();
     if(state.mode === 'exam' || state.mode === 'mock'){
       populateExamLevels();
       updateGradeFixedInfo();
@@ -1179,7 +1200,33 @@ document.querySelectorAll('.mode-btn').forEach(btn=>{
   });
 });
 
-/* ---------------- Chọn hình thức thi (Giữ bậc / Nâng bậc) và bậc thi ---------------- */
+/* ---------------- Tự động điền + khoá thông tin thí sinh từ tài khoản đăng nhập ---------------- */
+// Nếu Sheet tài khoản có đủ fullname/dob/cccd/dept cho tài khoản đang đăng nhập,
+// tự điền và khoá (readonly/disabled) các ô này để không ai sửa tay được -> chống thi hộ, gian lận thông tin.
+function applyAccountToExamFields(){
+  const acc = state.account;
+  const nameEl = document.getElementById('examName');
+  const dobEl = document.getElementById('examDob');
+  const cccdEl = document.getElementById('examCccd');
+  const deptEl = document.getElementById('examDept');
+  const noteEl = document.getElementById('examAccountNote');
+  const hasFullAccountInfo = acc && acc.fullname && acc.dob && acc.cccd && acc.dept;
+
+  if(hasFullAccountInfo){
+    nameEl.value = acc.fullname; nameEl.readOnly = true;
+    dobEl.value = acc.dob; dobEl.readOnly = true;
+    cccdEl.value = acc.cccd; cccdEl.readOnly = true;
+    deptEl.value = acc.dept; deptEl.disabled = true;
+    if(noteEl) noteEl.innerHTML = '🔒 Thông tin được lấy tự động từ tài khoản đăng nhập, không thể chỉnh sửa.';
+  } else {
+    // Sheet tài khoản chưa có đủ thông tin cho tài khoản này -> vẫn cho nhập tay như trước (không chặn thí sinh thi).
+    nameEl.readOnly = false; dobEl.readOnly = false; cccdEl.readOnly = false; deptEl.disabled = false;
+    if(noteEl) noteEl.innerHTML = '';
+  }
+  validateStart();
+}
+
+
 // Trả về danh sách câu hỏi (trong state.questions, đã lọc theo chức danh) phù hợp với hình thức thi / bậc thi đang chọn.
 // Bỏ qua điều kiện nào chưa được chọn (examType hoặc level rỗng nghĩa là chưa lọc theo điều kiện đó).
 function gradeFilteredQuestions(examType, level){
@@ -1309,7 +1356,23 @@ function shuffle(arr){
   return a;
 }
 
-document.getElementById('startBtn').addEventListener('click', ()=>{
+// Gọi Apps Script riêng để "giữ chỗ" 1 lượt thi chính thức cho tài khoản hôm nay.
+// Trả về Promise<{allowed:boolean, message?:string}>. Nếu chưa cấu hình URL -> luôn cho phép (không giới hạn).
+function claimExamSlot(username){
+  if(!CONFIG.EXAM_LOCK_WEBAPP_URL || CONFIG.EXAM_LOCK_WEBAPP_URL.startsWith('DÁN_LINK')){
+    return Promise.resolve({ allowed:true });
+  }
+  return fetch(CONFIG.EXAM_LOCK_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // text/plain để tránh preflight CORS, nhưng response vẫn đọc được (không dùng no-cors)
+    body: JSON.stringify({ username })
+  })
+    .then(res => res.json())
+    .then(data => ({ allowed: !!data.allowed, message: data.message || '' }))
+    .catch(err => ({ allowed:false, message: 'Không kiểm tra được lượt thi (lỗi mạng): ' + (err.message||err) }));
+}
+
+function buildAndShowQuiz(){
   if(state.mode === 'practice'){
     const cats = state.practiceCats;
     let pool = cats.size ? state.questions.filter(q=>cats.has(q.category)) : state.questions.slice();
@@ -1343,6 +1406,30 @@ document.getElementById('startBtn').addEventListener('click', ()=>{
   }
   renderQuiz();
   showScreen('screen-quiz');
+}
+
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  const startBtn = document.getElementById('startBtn');
+  const lockStatus = document.getElementById('examLockStatus');
+  if(lockStatus) lockStatus.innerHTML = '';
+
+  // Chỉ chế độ "Thi chính thức" mới bị giới hạn 1 lượt/ngày theo tài khoản.
+  if(state.mode === 'exam'){
+    startBtn.disabled = true;
+    if(lockStatus) lockStatus.innerHTML = '⏳ Đang kiểm tra lượt thi...';
+    claimExamSlot(state.username).then(({allowed, message})=>{
+      if(allowed){
+        if(lockStatus) lockStatus.innerHTML = '';
+        buildAndShowQuiz();
+      } else {
+        startBtn.disabled = false;
+        if(lockStatus) lockStatus.innerHTML = `<span style="color:#c0392b;">❌ ${message || 'Tài khoản này đã làm bài thi hôm nay, không thể thi lại.'}</span>`;
+      }
+    });
+    return;
+  }
+
+  buildAndShowQuiz();
 });
 
 /* ---------------- Step 3: Quiz rendering ---------------- */
@@ -1749,10 +1836,12 @@ document.getElementById('restartBtn').addEventListener('click', ()=>{
   document.getElementById('gradeOpts').style.display='none';
   document.getElementById('examOpts').style.display='none';
   document.getElementById('mockOpts').style.display='none';
-  document.getElementById('examName').value='';
-  document.getElementById('examDob').value='';
-  document.getElementById('examCccd').value='';
-  document.getElementById('examDept').value='';
+  document.getElementById('examName').value=''; document.getElementById('examName').readOnly=false;
+  document.getElementById('examDob').value=''; document.getElementById('examDob').readOnly=false;
+  document.getElementById('examCccd').value=''; document.getElementById('examCccd').readOnly=false;
+  document.getElementById('examDept').value=''; document.getElementById('examDept').disabled=false;
+  document.getElementById('examAccountNote').innerHTML='';
+  document.getElementById('examLockStatus').innerHTML='';
   document.getElementById('examType').value='';
   document.getElementById('examLevel').innerHTML = '<option value="">-- Chọn bậc thi --</option>';
   buildChipGroup('practiceCats', state.practiceCats);
