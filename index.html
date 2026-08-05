@@ -65,7 +65,7 @@
   }
   .login-welcome{
     max-width:420px;
-    margin:8vh auto 0;
+    margin:3vh auto 0;
     text-align:center;
     color:#fff;
     font-family:var(--font-display, var(--font-body));
@@ -180,6 +180,10 @@
   /* Màn hình hẹp (điện thoại): tách "Đăng xuất" lên hàng trên cùng logo,
      để dòng tiêu đề được chiếm trọn 1 hàng riêng, có đủ chỗ hiển thị 2 dòng. */
   @media (max-width: 480px){
+    .login-welcome{
+      margin-top:1.5vh;
+      font-size:17px;
+    }
     header.top{
       padding-right:14px;
     }
