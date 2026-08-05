@@ -56,12 +56,24 @@
   .login-card{
     width:100%;
     max-width:340px;
-    margin:8vh auto 0;
+    margin:20px auto 0;
     background:rgba(255,255,255,0.98);
     border-radius:var(--radius);
     padding:28px 24px 24px;
     box-shadow:0 20px 60px rgba(0,0,0,0.35);
     text-align:center;
+  }
+  .login-welcome{
+    max-width:420px;
+    margin:8vh auto 0;
+    text-align:center;
+    color:#fff;
+    font-family:var(--font-display, var(--font-body));
+    font-size:19px;
+    font-weight:800;
+    line-height:1.4;
+    letter-spacing:.02em;
+    text-shadow:0 2px 12px rgba(0,0,0,0.45);
   }
   .login-logo-wrap{ margin-bottom:10px; }
   .login-logo{ height:90px; width:auto; }
@@ -472,6 +484,7 @@
 
     <!-- SCREEN 0: ĐĂNG NHẬP -->
     <section id="screen-login" class="screen active login-screen">
+      <p class="login-welcome">CHÀO MỪNG BẠN ĐẾN VỚI<br>HỆ THỐNG LUYỆN TẬP VÀ<br>THI TRẮC NGHIỆM NMTĐ ĐAKĐRINH</p>
       <div class="login-card">
         <div class="login-logo-wrap">
           <img id="loginLogo" alt="Logo" class="login-logo">
