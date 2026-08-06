@@ -150,14 +150,14 @@
     background:var(--amber);
     color:var(--navy-deep);
     border:none;
-    border-radius:7px;
-    padding:4px 9px;
-    font-size:10.5px;
+    border-radius:9px;
+    padding:7px 14px;
+    font-size:13px;
     font-weight:700;
     white-space:nowrap;
     cursor:pointer;
     box-shadow:0 3px 10px rgba(0,0,0,0.35);
-    max-width:52vw;
+    max-width:58vw;
     overflow:hidden;
     text-overflow:ellipsis;
   }
@@ -792,6 +792,8 @@ function onLoginSuccess(){
 
 /* ---------------- Nút "Xin chào, {họ tên}" ở header: bấm vào để hiện "Thoát" (đăng xuất) ---------------- */
 let userGreetShowingLogout = false;
+let userGreetResetTimer = null;
+const USER_GREET_RESET_MS = 4000; // Sau 4 giây không bấm tiếp, tự quay lại "Xin chào, ..."
 
 function getDisplayName(){
   const fullname = state.account && state.account.fullname;
@@ -800,6 +802,7 @@ function getDisplayName(){
 
 function updateUserGreetButton(){
   userGreetShowingLogout = false;
+  clearTimeout(userGreetResetTimer);
   const textEl = document.getElementById('userGreetText');
   if(textEl) textEl.textContent = 'Xin chào, ' + getDisplayName();
 }
@@ -816,9 +819,11 @@ function performLogout(){
 
 document.getElementById('userGreetBtn').addEventListener('click', ()=>{
   const textEl = document.getElementById('userGreetText');
+  clearTimeout(userGreetResetTimer);
   if(!userGreetShowingLogout){
     userGreetShowingLogout = true;
     if(textEl) textEl.textContent = 'Thoát';
+    userGreetResetTimer = setTimeout(updateUserGreetButton, USER_GREET_RESET_MS);
   } else {
     performLogout();
   }
